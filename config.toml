@@ -1,0 +1,48 @@
+# mediaworker configuration file
+# All paths can be absolute or relative to the location of this file.
+
+[directories]
+# Directory to scan for media files (recursively)
+input = "./input"
+# Directory where encoded files will be placed (mirrors input structure)
+output = "./output"
+# Directory for temporary processing files (to allow atomic moves)
+processing = "./processing"
+# Directory for log files
+logs = "./logs"
+
+[encoder]
+# FFmpeg video preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
+preset = "medium"
+# Constant Rate Factor (quality) for video (0-51, lower is better quality)
+crf = 28
+# Video codec to use
+video_codec = "libx265"
+# Audio codec to use
+audio_codec = "libopus"
+# Audio bitrate (e.g., 128k, 192k) - note: for opus, this is adjusted based on channels
+audio_bitrate = "96k"
+# Subtitle codec (copy to preserve original, or re-encode to e.g., subrip)
+subtitle_codec = "copy"
+# Maximum width for scaling (set to None to disable width limit)
+max_width = 1920
+# Maximum height for scaling (set to None to disable height limit)
+max_height = 1080
+# Only scale down if video exceeds limits (never upscale)
+scale_down_only = true
+# If true, copy video stream instead of re-encoding
+copy_video = false
+# If true, copy audio stream instead of re-encoding
+copy_audio = false
+
+[ffmpeg]
+# Path to FFmpeg executable (if not in PATH)
+path = "ffmpeg"
+# Optional extra arguments to prepend to every FFmpeg call (e.g., for hardware acceleration)
+# extra_args = ["-hwaccel", "cuda"]
+
+# File extensions to consider as video files (lowercase, with leading dot)
+video_extensions = [".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm"]
+
+# File extensions to consider as subtitle files
+subtitle_extensions = [".srt", ".ass", ".ssa", ".sub", ".idx"]

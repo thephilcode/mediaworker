@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mediaworker"
+version = "0.1.0"
+description = "Automated media encoding worker for Linux VPS"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Philip Ayo", email = "philipayolexz@gmail.com"}
+]
+keywords = ["video", "encoding", "ffmpeg", "worker"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+]
+
+# No external dependencies; everything uses stdlib
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/thephilcode/mediaworker"
+
+[project.scripts]
+mediaworker = "encoder.mediaworker:main"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.isqrt]
+# isort configuration if used
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_quotes = true
