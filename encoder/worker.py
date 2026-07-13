@@ -11,9 +11,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .config import Config
+from .config import Config, load_config
 from .ffmpeg_builder import build_ffmpeg_cmd, run_ffmpeg
-from .queue import load_queue, save_queue, move_to_done, is_processed
+from .queue import move_to_done
 from .scanner import get_pending_files
 from .utils import ensure_dir, setup_logging, human_readable_bytes
 

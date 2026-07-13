@@ -28,6 +28,9 @@ Homepage = "https://github.com/thephilcode/mediaworker"
 [project.scripts]
 mediaworker = "encoder.mediaworker:main"
 
+[tool.setuptools]
+packages = ["encoder"]
+
 [tool.black]
 line-length = 88
 target-version = ['py39']

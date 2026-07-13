@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List
 
 from .config import Config, EncoderSettings
-from .utils import find_subtitle_files, human_readable_bytes
+from .utils import find_subtitle_files
 from .subtitles import build_subtitle_disposition_args, build_subtitle_metadata_args
 
 

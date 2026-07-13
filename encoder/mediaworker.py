@@ -7,11 +7,10 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 from pathlib import Path
 
 from .config import load_config
-from .scanner import get_pending_files, scan_videos
+from .scanner import get_pending_files
 from .worker import worker_loop
 from .utils import setup_logging, ensure_dir, human_readable_bytes
 
