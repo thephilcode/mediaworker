@@ -26,6 +26,12 @@ class EncoderSettings:
     scale_down_only: bool = True
     copy_video: bool = False
     copy_audio: bool = False
+    vbr: bool = True
+    comment: str = ""
+    # Use VBR for audio (default: on)
+    vbr: bool = True
+    # Optional comment to add to the output container
+    comment: str = ""
 
 
 @dataclass
@@ -105,6 +111,8 @@ def load_config(config_path: Path | str = "config.toml") -> Config:
         scale_down_only=enc_data.get("scale_down_only", True),
         copy_video=enc_data.get("copy_video", False),
         copy_audio=enc_data.get("copy_audio", False),
+        vbr=enc_data.get("vbr", True),
+        comment=enc_data.get("comment", ""),
     )
 
     # FFmpeg settings (optional)

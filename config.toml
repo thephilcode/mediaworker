@@ -34,6 +34,10 @@ scale_down_only = true
 copy_video = false
 # If true, copy audio stream instead of re-encoding
 copy_audio = false
+# Use VBR for audio (default: on)
+vbr = true
+# Optional comment to add to the output container
+comment = ""
 
 [ffmpeg]
 # Path to FFmpeg executable (if not in PATH)

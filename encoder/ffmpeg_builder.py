@@ -50,6 +50,35 @@ def probe_audio_channels(file_path: Path) -> int:
     return 2  # Default to stereo
 
 
+def _scale_vf(max_w: int | None, max_h: int | None, scale_down_only: bool) -> str:
+    """Build a `-vf scale=` filter preserving aspect ratio with even dims.
+
+    - scale_down_only: never upscale (each bound clamped to source size via min).
+    - One bound None: drive that axis only; the other picks `-2` (auto, even).
+    """
+    if scale_down_only:
+        if max_w and max_h:
+            opts = [
+                f"w='min({max_w}\\,iw)'",
+                f"h='min({max_h}\\,ih)'",
+                "force_original_aspect_ratio=decrease",
+            ]
+        elif max_w:
+            opts = [f"w='min({max_w}\\,iw)'", "h=-2"]
+        else:
+            opts = [f"h='min({max_h}\\,ih)'", "w=-2"]
+    else:
+        # Scale to fill the box (may upscale), aspect preserved, even dims.
+        if max_w and max_h:
+            opts = [f"w={max_w}", f"h={max_h}", "force_original_aspect_ratio=decrease"]
+        elif max_w:
+            opts = [f"w={max_w}", "h=-2"]
+        else:
+            opts = [f"h={max_h}", "w=-2"]
+    opts.append("force_divisible_by=2")
+    return "scale=" + ":".join(opts)
+
+
 def build_ffmpeg_cmd(
     config: Config,
     input_path: Path,
@@ -76,18 +105,15 @@ def build_ffmpeg_cmd(
         ffmpeg_cmd.extend(["-c:v", "copy"])
     else:
         ffmpeg_cmd.extend(["-c:v", encoder.video_codec, "-preset", encoder.preset, "-crf", str(encoder.crf)])
-        # Scaling
+        # Scaling (only when re-encoding video).
+        # Preserves aspect ratio and forces even dimensions (codec requirement).
+        # Commas inside expressions are backslash-escaped so the filtergraph
+        # parser doesn't treat them as filter separators.
         if encoder.max_width or encoder.max_height:
-            scale_filter = []
-            if encoder.max_width:
-                scale_filter.append(f"w='min({encoder.max_width},iw)'")
-            if encoder.max_height:
-                scale_filter.append(f"h='min({encoder.max_height},ih)'")
-            # Ensure even dimensions (required by many codecs)
-            scale_filter.append("w='(iw/mod(iw,2))'")
-            scale_filter.append("h='(ih/mod(ih,2))'")
-            vf = ",".join(scale_filter)
-            ffmpeg_cmd.extend(["-vf", f"scale={vf}"] if encoder.scale_down_only else [f"scale={vf}"])
+            ffmpeg_cmd.extend([
+                "-vf",
+                _scale_vf(encoder.max_width, encoder.max_height, encoder.scale_down_only),
+            ])
 
     # Audio settings
     if encoder.copy_audio:
@@ -95,10 +121,12 @@ def build_ffmpeg_cmd(
     else:
         ffmpeg_cmd.extend(["-c:a", encoder.audio_codec, "-b:a", encoder.audio_bitrate])
 
+        # VBR flag (if enabled) - applies to any codec
+        if encoder.vbr:
+            ffmpeg_cmd.extend(["-vbr", "on"])
+
         # Opus-specific settings
         if encoder.audio_codec == "libopus":
-            ffmpeg_cmd.extend(["-vbr", "on"])  # Use VBR for opus
-
             # For opus, adjust channel layout based on source
             channels = probe_audio_channels(input_path)
             if channels <= 2:
@@ -136,6 +164,10 @@ def build_ffmpeg_cmd(
     # Add subtitle disposition flags (default, forced, hearing_impaired)
     ffmpeg_cmd.extend(build_subtitle_disposition_args(config, subtitle_files))
 
+    # Add global and video stream comment if configured
+    if encoder.comment:
+        ffmpeg_cmd.extend(["-metadata", f"comment={encoder.comment}"])
+        ffmpeg_cmd.extend(["-metadata:s:v:0", f"comment={encoder.comment}"])
     # Optional: Disable subtitle encoding if we're copying
     # Not needed as mapping is handled above
 

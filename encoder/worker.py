@@ -67,7 +67,9 @@ def process_file(config: Config, input_path: Path) -> bool:
 
     if result.returncode != 0:
         logger.error(f"FFmpeg failed for {input_path} with return code {result.returncode}")
-        logger.error(f"FFmpeg stderr: {result.stderr[:500]}")  # limit log size
+        logger.error(f"FFmpeg command: {' '.join(cmd)}")
+        # FFmpeg prints the banner first and errors last; show the tail.
+        logger.error(f"FFmpeg stderr (tail): {(result.stderr or '')[-2000:]}")
         return False
 
     # Log output size
