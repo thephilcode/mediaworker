@@ -26,12 +26,12 @@ class EncoderSettings:
     scale_down_only: bool = True
     copy_video: bool = False
     copy_audio: bool = False
-    vbr: bool = True
-    comment: str = ""
     # Use VBR for audio (default: on)
     vbr: bool = True
     # Optional comment to add to the output container
     comment: str = ""
+    # Max attempts per file before giving up and moving it to failed.txt
+    max_attempts: int = 3
 
 
 @dataclass
@@ -80,7 +80,6 @@ def load_config(config_path: Path | str = "config.toml") -> Config:
         FileNotFoundError: If the config file does not exist.
         tomllib.TOMLDecodeError: If the file is not valid TOML.
     """
-    path = set
     with open(config_path, "rb") as f:
         data = tomllib.load(f)
 
@@ -113,6 +112,7 @@ def load_config(config_path: Path | str = "config.toml") -> Config:
         copy_audio=enc_data.get("copy_audio", False),
         vbr=enc_data.get("vbr", True),
         comment=enc_data.get("comment", ""),
+        max_attempts=enc_data.get("max_attempts", 3),
     )
 
     # FFmpeg settings (optional)

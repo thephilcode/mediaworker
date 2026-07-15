@@ -13,7 +13,7 @@ from typing import Optional
 
 from .config import Config, load_config
 from .ffmpeg_builder import build_ffmpeg_cmd, run_ffmpeg
-from .queue import move_to_done
+from .queue import move_to_done, move_to_failed
 from .scanner import get_pending_files
 from .utils import ensure_dir, setup_logging, human_readable_bytes
 
@@ -106,6 +106,13 @@ def worker_loop(config: Config, target_count: Optional[int] = None) -> int:
     """
     processed = 0
     failed = 0
+    # ponytail: in-memory attempt count; resets each run. A crash mid-batch loses
+    # this, but a re-run re-queues via get_pending_files anyway, so no need to persist.
+    attempts: dict[Path, int] = {}
+    max_attempts = config.encoder.max_attempts
+    queue_file = config.directories.processing / "queue.txt"
+    done_file = config.directories.processing / "done.txt"
+    failed_file = config.directories.processing / "failed.txt"
 
     while True:
         pending = get_pending_files(config)
@@ -123,16 +130,26 @@ def worker_loop(config: Config, target_count: Optional[int] = None) -> int:
         success = process_file(config, file_path)
         if success:
             # Mark as processed (move from queue to done)
-            move_to_done(
-                config.directories.processing / "queue.txt",
-                config.directories.processing / "done.txt",
-                file_path,
-            )
+            move_to_done(queue_file, done_file, file_path)
             processed += 1
+            attempts.pop(file_path, None)
         else:
-            failed += 1
-            # Leave in queue for retry (could implement retry limit later)
-            logger.error(f"Failed to process {file_path}; it remains in queue for retry.")
+            attempts[file_path] = attempts.get(file_path, 0) + 1
+            if attempts[file_path] >= max_attempts:
+                # Exhausted retries: pull it out of the queue so the run can
+                # continue past it. Recorded in failed.txt for the user to inspect.
+                logger.error(
+                    f"Giving up on {file_path} after {attempts[file_path]} attempt(s); "
+                    f"moved to {failed_file.name} for review."
+                )
+                move_to_failed(queue_file, failed_file, file_path)
+                failed += 1
+            else:
+                # Leave in queue; get_pending_files re-serves it next iteration.
+                logger.error(
+                    f"Failed to process {file_path}; will retry "
+                    f"({attempts[file_path]}/{max_attempts})."
+                )
 
     logger.info(f"Worker loop finished. Processed: {processed}, Failed: {failed}")
     return processed

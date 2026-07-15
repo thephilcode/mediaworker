@@ -97,8 +97,15 @@ def build_ffmpeg_cmd(
     encoder = config.encoder
     ffmpeg_cmd = [config.ffmpeg.path] + config.ffmpeg.extra_args
 
-    # Input
+    # Inputs: main video first, then every matching subtitle file.
+    # ALL inputs must precede any output options (-c:v, -vf, -map, ...).
+    # FFmpeg assigns options between two files to the NEXT file, so output
+    # opts placed before later -i inputs get mis-attributed to that input
+    # and rejected (return code 234, "Option vf cannot be applied to input url").
     ffmpeg_cmd.extend(["-i", str(input_path)])
+    subtitle_files = find_subtitle_files(input_path, config.subtitle_extensions)
+    for sub_file in subtitle_files:
+        ffmpeg_cmd.extend(["-i", str(sub_file)])
 
     # Video settings
     if encoder.copy_video:
@@ -140,11 +147,6 @@ def build_ffmpeg_cmd(
                 if encoder.audio_bitrate == "96k":  # Only adjust if using default
                     ffmpeg_cmd[-2] = "-b:a"
                     ffmpeg_cmd[-1] = "192k"  # Replace the bitrate
-
-    # Subtitle handling: attach all matching subtitle files as streams
-    subtitle_files = find_subtitle_files(input_path, config.subtitle_extensions)
-    for i, sub_file in enumerate(subtitle_files):
-        ffmpeg_cmd.extend(["-i", str(sub_file)])
 
     # Map directives
     # Map video from first input (0:v)

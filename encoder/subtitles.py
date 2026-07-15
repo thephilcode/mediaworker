@@ -311,7 +311,11 @@ def build_subtitle_disposition_args(
 
         # Add disposition argument if any flags
         if disposition_flags:
-            args.extend(["-disposition:s:" + str(i), " ".join(disposition_flags)])
+            # ffmpeg combines multiple dispositions with '+', not a space.
+            # A space ("default hearing_impaired") fails with return code 234
+            # "Undefined constant ... in 'defaulthearing_impaired'" / "Error
+            # setting output stream dispositions".
+            args.extend(["-disposition:s:" + str(i), "+".join(disposition_flags)])
 
     return args
 

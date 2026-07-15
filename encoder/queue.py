@@ -67,6 +67,25 @@ def move_to_done(queue_file: Path, done_file: Path, path: Path) -> None:
         f.write(str(path) + "\n")
 
 
+def move_to_failed(queue_file: Path, failed_file: Path, path: Path) -> None:
+    """Remove a path from the queue and append it to the failed file.
+
+    Mirrors move_to_done: pulls the path out of the queue (so subsequent
+    get_pending_files calls skip it) and records it in failed.txt for review.
+
+    Args:
+        queue_file: Path to the queue text file.
+        failed_file: Path to the failed text file.
+        path: The Path to move.
+    """
+    pending = load_queue(queue_file)
+    new_pending = [p for p in pending if p != path]
+    save_queue(queue_file, new_pending)
+    failed_file.parent.mkdir(parents=True, exist_ok=True)
+    with failed_file.open("a", encoding="utf-8") as f:
+        f.write(str(path) + "\n")
+
+
 def clear_queue(queue_file: Path) -> None:
     """Remove all entries from the queue file.
 

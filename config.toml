@@ -38,6 +38,11 @@ copy_audio = false
 vbr = true
 # Optional comment to add to the output container
 comment = ""
+# Max encode attempts per file before giving up and moving it to failed.txt.
+# A deterministic failure (bad command, corrupt input) just wastes the extra
+# tries; 1 = fail fast. Set higher (3+) if you see transient failures (disk full,
+# flaky network mount) you want the run to retry past.
+max_attempts = 3
 
 [ffmpeg]
 # Path to FFmpeg executable (if not in PATH)
