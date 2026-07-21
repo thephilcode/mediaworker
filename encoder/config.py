@@ -35,6 +35,11 @@ class EncoderSettings:
     # If set, force this output file extension (including the dot) for all encodes.
     # If None, preserve the input file's extension.
     output_extension: str | None = None
+    # If True, replace known codec identifiers in the filename stem with the
+    # current video/audio codec identifiers (e.g., replace "x264" with "x265"
+    # when encoding to libx265, or "aac" with "opus" when encoding to libopus)
+    # to visually distinguish re-encoded files.
+    rename_by_codec: bool = False
 
 
 @dataclass

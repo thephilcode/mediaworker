@@ -55,6 +55,47 @@ def process_file(config: Config, input_path: Path) -> bool:
         if rel_path.suffix != ext:
             rel_path = rel_path.with_suffix(ext)
 
+    # Optionally replace codec identifiers in the filename stem to reflect encoding changes
+    if config.encoder.rename_by_codec:
+        stem = rel_path.stem
+        original_stem = stem
+        # Video codec replacement (if not copying video)
+        if not config.encoder.copy_video:
+            codec_to_token = {
+                "libx264": "x264",
+                "libx265": "x265",
+                "libvpx-vp9": "vp9",
+                "av1": "av1",
+            }
+            token = codec_to_token.get(config.encoder.video_codec, config.encoder.video_codec)
+            # Known patterns that indicate a video codec in filenames
+            patterns = ["x264", "h264", "H264", "avc", "AVC",
+                        "x265", "h265", "H265", "hevc", "HEVC",
+                        "av1", "AV1"]
+            for pat in patterns:
+                if pat in stem:
+                    stem = stem.replace(pat, token)
+        # Audio codec replacement (if not copying audio)
+        if not config.encoder.copy_audio:
+            audio_codec_to_token = {
+                "aac": "aac",
+                "ac3": "ac3",
+                "libopus": "opus",
+                "mp3": "mp3",
+                "flac": "flac",
+                # Add more as needed
+            }
+            audio_token = audio_codec_to_token.get(config.encoder.audio_codec, config.encoder.audio_codec)
+            # Known patterns that indicate an audio codec in filenames
+            audio_patterns = ["aac", "ac3", "opus", "mp3", "flac"]
+            for pat in audio_patterns:
+                if pat in stem:
+                    stem = stem.replace(pat, audio_token)
+        # If the stem changed, update the relative path
+        if stem != original_stem:
+            # Preserve the suffix (which may have been changed by output_extension override)
+            rel_path = rel_path.parent / (stem + rel_path.suffix)
+
     output_path = config.directories.output / rel_path
     # Ensure output directory exists
     ensure_dir(output_path.parent)
