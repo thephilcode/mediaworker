@@ -40,7 +40,20 @@ def process_file(config: Config, input_path: Path) -> bool:
 
     # Apply output extension override if configured
     if config.encoder.output_extension is not None:
-        rel_path = rel_path.with_suffix(config.encoder.output_extension)
+        # Validate extension to prevent path traversal
+        ext = config.encoder.output_extension
+        if not ext.startswith('.'):
+            logger.error(f"Output extension must start with a dot: {ext}")
+            return False
+        # Additional safety: ensure extension contains only safe characters (alphanumeric, dot, hyphen, underscore)
+        # This prevents path separators and other dangerous characters
+        import re
+        if not re.match(r'^[\.\w\-]+$', ext):
+            logger.error(f"Output extension contains invalid characters: {ext}")
+            return False
+        # Only apply if the extension is different from current suffix to avoid unnecessary changes
+        if rel_path.suffix != ext:
+            rel_path = rel_path.with_suffix(ext)
 
     output_path = config.directories.output / rel_path
     # Ensure output directory exists
