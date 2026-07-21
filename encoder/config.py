@@ -32,6 +32,9 @@ class EncoderSettings:
     comment: str = ""
     # Max attempts per file before giving up and moving it to failed.txt
     max_attempts: int = 3
+    # If set, force this output file extension (including the dot) for all encodes.
+    # If None, preserve the input file's extension.
+    output_extension: str | None = None
 
 
 @dataclass

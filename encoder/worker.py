@@ -38,6 +38,10 @@ def process_file(config: Config, input_path: Path) -> bool:
         logger.error(f"File {input_path} is not under input directory {config.directories.input}")
         return False
 
+    # Apply output extension override if configured
+    if config.encoder.output_extension is not None:
+        rel_path = rel_path.with_suffix(config.encoder.output_extension)
+
     output_path = config.directories.output / rel_path
     # Ensure output directory exists
     ensure_dir(output_path.parent)

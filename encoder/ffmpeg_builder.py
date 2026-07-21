@@ -126,27 +126,31 @@ def build_ffmpeg_cmd(
     if encoder.copy_audio:
         ffmpeg_cmd.extend(["-c:a", "copy"])
     else:
-        ffmpeg_cmd.extend(["-c:a", encoder.audio_codec, "-b:a", encoder.audio_bitrate])
+        # Determine audio bitrate for opus
+        audio_bitrate = encoder.audio_bitrate
+        if encoder.audio_codec == "libopus" and encoder.audio_bitrate == "96k":
+            channels = probe_audio_channels(input_path)
+            if 2 < channels <= 6:
+                audio_bitrate = "192k"
+
+        ffmpeg_cmd.extend(["-c:a", encoder.audio_codec, "-b:a", audio_bitrate])
 
         # VBR flag (if enabled) - applies to any codec
         if encoder.vbr:
             ffmpeg_cmd.extend(["-vbr", "on"])
 
-        # Opus-specific settings
+        # Opus-specific settings: channel layout
         if encoder.audio_codec == "libopus":
-            # For opus, adjust channel layout based on source
             channels = probe_audio_channels(input_path)
             if channels <= 2:
                 ffmpeg_cmd.extend(["-channel_layout", "stereo"])
-                # For stereo opus, 96k is good
-                if encoder.audio_bitrate == "96k":  # Only adjust if using default
-                    pass  # Keep 96k for stereo
             elif channels <= 6:
+                # For surround sound, we want a surround channel layout
                 ffmpeg_cmd.extend(["-channel_layout", "surround"])
-                # For surround sound opus, 192k is better
-                if encoder.audio_bitrate == "96k":  # Only adjust if using default
-                    ffmpeg_cmd[-2] = "-b:a"
-                    ffmpeg_cmd[-1] = "192k"  # Replace the bitrate
+
+    # Subtitle settings
+    subtitle_codec = getattr(encoder, 'subtitle_codec', 'copy')
+    ffmpeg_cmd.extend(["-c:s", subtitle_codec])
 
     # Map directives
     # Map video from first input (0:v)
