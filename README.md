@@ -92,7 +92,7 @@ Removes the processing directory (where intermediate files are stored).
 
 ## Configuration File (config.toml)
 
-See the provided `config.toml` for example settings and comments.
+See the provided `config.toml.example` for documented example settings and comments.
 
 ## Development
 

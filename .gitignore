@@ -139,11 +139,15 @@ logs/
 
 # Temporary processing directories (may be regenerated)
 processing/
-# Input and output directories 
+# Input and output directories
 # Video files to be encoded or folders containing them are
 # put by the user into the input directory before the tool is run
 input/
 output/
+
+# Local configuration (copy from config.toml.example)
+# Keep real paths/settings local; only the example is committed.
+config.toml
 
 # Todo list (development only)
 TODO.md

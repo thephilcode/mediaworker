@@ -1,0 +1,72 @@
+# mediaworker example configuration
+# Copy this file to config.toml and adjust to your needs:
+#   cp config.toml.example config.toml
+# config.toml is gitignored; keep your real settings local.
+#
+# All paths can be absolute or relative to the location of this file.
+
+[directories]
+# Directory to scan for media files (recursively)
+input = "./input"
+# Directory where encoded files will be placed (mirrors input structure)
+output = "./output"
+# Directory for temporary processing files (to allow atomic moves)
+processing = "./processing"
+# Directory for log files
+logs = "./logs"
+
+[encoder]
+# FFmpeg video preset
+# (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
+preset = "medium"
+# Constant Rate Factor (quality) for video (0-51, lower = better quality, larger file)
+crf = 28
+# Video codec to use (libx264, libx265, libvpx-vp9, av1, ...)
+video_codec = "libx265"
+# Audio codec to use (aac, ac3, libopus, mp3, flac, ...)
+audio_codec = "libopus"
+# Audio bitrate (e.g., 96k, 128k, 192k).
+# For libopus with 3-6 channel sources, the worker automatically raises 96k
+# to 192k for better multichannel quality.
+audio_bitrate = "96k"
+# Subtitle codec (copy to preserve original, or re-encode e.g. to "subrip")
+subtitle_codec = "copy"
+# Maximum width/height for scaling (set to null to disable that limit)
+max_width = 1920
+max_height = 1080
+# Only scale down if video exceeds limits (never upscale)
+scale_down_only = true
+# If true, copy the video stream instead of re-encoding
+copy_video = false
+# If true, copy the audio stream instead of re-encoding
+copy_audio = false
+# Use VBR for audio (applies to codecs that support it, e.g. libopus/aac)
+vbr = true
+# Optional comment written into the output container metadata
+comment = ""
+# Max encode attempts per file before giving up and moving it to failed.txt.
+# A deterministic failure (bad command, corrupt input) just wastes the extra
+# tries; 1 = fail fast. Set higher (3+) if you see transient failures (disk
+# full, flaky network mount) you want the run to retry past.
+max_attempts = 3
+# Force this output file extension (including the dot) for every encode,
+# regardless of the input extension. e.g. ".mkv" converts mp4 -> mkv too.
+# Set to null (or omit) to preserve the input file's original extension.
+output_extension = ".mkv"
+# Replace known codec tokens in the filename (e.g. x264 -> x265) so re-encoded
+# files are distinguishable from originals at a glance. Video tokens are
+# replaced only when copy_video = false; audio tokens only when copy_audio =
+# false. e.g. "Movie.x264.AAC.mp4" -> "Movie.x265.opus.mkv".
+rename_by_codec = true
+
+[ffmpeg]
+# Path to FFmpeg executable (if not in PATH)
+path = "ffmpeg"
+# Optional extra arguments to prepend to every FFmpeg call (e.g. hardware accel)
+# extra_args = ["-hwaccel", "cuda"]
+
+# File extensions to consider as video files (lowercase, with leading dot)
+video_extensions = [".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm"]
+
+# File extensions to consider as subtitle files
+subtitle_extensions = [".srt", ".ass", ".ssa", ".sub", ".idx"]

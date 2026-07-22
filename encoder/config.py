@@ -121,6 +121,8 @@ def load_config(config_path: Path | str = "config.toml") -> Config:
         vbr=enc_data.get("vbr", True),
         comment=enc_data.get("comment", ""),
         max_attempts=enc_data.get("max_attempts", 3),
+        output_extension=enc_data.get("output_extension"),
+        rename_by_codec=enc_data.get("rename_by_codec", False),
     )
 
     # FFmpeg settings (optional)
