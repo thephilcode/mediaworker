@@ -90,11 +90,19 @@ def find_subtitle_files(video_path: Path, subtitle_exts: set[str]) -> list[Path]
     if not video_path.is_file():
         return []
 
-    # Same directory: match by basename
-    base = video_path.with_suffix("")
+    # Same directory: match by basename.
+    # Strip only the video's own extension (NOT Path.with_suffix(""): that
+    # operates on dotted suffixes and corrupts release names whose bracketed
+    # tags contain dots, e.g. "...AAC-[YTS.BZ].mp4" -> with_suffix(".srt")
+    # yields "...AAC-[YTS.srt" instead of "...AAC-[YTS.BZ].srt"). Strip the
+    # known video suffix by length, then append the subtitle extension.
+    name = video_path.name
+    video_ext = video_path.suffix  # final suffix e.g. ".mp4"
+    base_name = name[: -len(video_ext)] if video_ext else name
+    video_dir = video_path.parent
     same_dir: list[Path] = []
     for ext in subtitle_exts:
-        candidate = base.with_suffix(ext)
+        candidate = video_dir / (base_name + ext)
         if candidate.is_file():
             same_dir.append(candidate)
     same_dir.sort()

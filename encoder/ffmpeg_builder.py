@@ -139,14 +139,12 @@ def build_ffmpeg_cmd(
         if encoder.vbr:
             ffmpeg_cmd.extend(["-vbr", "on"])
 
-        # Opus-specific settings: channel layout
-        if encoder.audio_codec == "libopus":
-            channels = probe_audio_channels(input_path)
-            if channels <= 2:
-                ffmpeg_cmd.extend(["-channel_layout", "stereo"])
-            elif channels <= 6:
-                # For surround sound, we want a surround channel layout
-                ffmpeg_cmd.extend(["-channel_layout", "surround"])
+        # No -channel_layout: libopus derives the output layout from the input
+        # stream's channel count automatically (5.1 in -> 5.1 out), matching
+        # the reference msr.bat. Passing a symbolic name (e.g. "surround") fails:
+        # "surround" is not a valid ffmpeg channel layout and libopus's encoder
+        # options don't expose channel_layout at all (rc 234, msg8371 in this
+        # build). See `ffmpeg -layouts`: valid names are mono/stereo/5.1/etc.
 
     # Subtitle settings
     subtitle_codec = getattr(encoder, 'subtitle_codec', 'copy')
@@ -165,10 +163,10 @@ def build_ffmpeg_cmd(
     ffmpeg_cmd.extend(["-map_metadata", "0"])
 
     # Add subtitle metadata (language, title)
-    ffmpeg_cmd.extend(build_subtitle_metadata_args(config, subtitle_files))
+    ffmpeg_cmd.extend(build_subtitle_metadata_args(config, subtitle_files, input_path))
 
     # Add subtitle disposition flags (default, forced, hearing_impaired)
-    ffmpeg_cmd.extend(build_subtitle_disposition_args(config, subtitle_files))
+    ffmpeg_cmd.extend(build_subtitle_disposition_args(config, subtitle_files, input_path))
 
     # Add global and video stream comment if configured
     if encoder.comment:

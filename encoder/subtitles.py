@@ -110,178 +110,195 @@ def needs_sdh_flag(subtitle_path: Path) -> bool:
     return False
 
 
+def _stem_no_ext(subtitle_path: Path) -> str:
+    """Filename stem with *all* trailing subtitle extensions stripped.
+
+    ``Path.stem`` only drops one suffix, but release subtitles often use a
+    ``.eng.srt`` / ``.por.ass`` form where the language code sits before the
+    extension. We want the bare title portion (``"Brazilian (Forced)"``), so we
+    peel every recognized subtitle suffix.
+
+    Example: ``"Brazilian (Forced).por.srt"`` -> ``"Brazilian (Forced)"``.
+    """
+    name = subtitle_path.name
+    for ext in (".srt", ".ass", ".ssa", ".sub", ".idx"):
+        if name.lower().endswith(ext):
+            return name[: -len(ext)]
+    return name
+
+
+_LANG_OVERRIDES = {
+    "english": "eng", "spanish": "spa", "french": "fre", "german": "ger",
+    "italian": "ita", "portuguese": "por", "russian": "rus", "japanese": "jpn",
+    "korean": "kor", "chinese": "chi", "arabic": "ara", "hindi": "hin",
+}
+
+# ponytail: one full-name table shared by language->name lookups, not two
+# parallel dicts drifting apart. Maps the 3-letter code to the display name.
+_LANG_NAMES = {
+    "eng": "English", "spa": "Spanish", "fre": "French", "ger": "German",
+    "ita": "Italian", "por": "Portuguese", "rus": "Russian", "jpn": "Japanese",
+    "kor": "Korean", "chi": "Chinese", "ara": "Arabic", "hin": "Hindi",
+    "dan": "Danish", "dut": "Dutch", "fin": "Finnish", "nob": "Norwegian",
+    "swe": "Swedish", "slv": "Slovenian", "ukr": "Ukrainian", "pol": "Polish",
+    "tur": "Turkish", "tha": "Thai", "vie": "Vietnamese", "ind": "Indonesian",
+    "may": "Malay", "heb": "Hebrew", "cze": "Czech", "hun": "Hungarian",
+    "rum": "Romanian", "gre": "Greek",
+}
+
+
 def get_subtitle_language(subtitle_path: Path) -> str:
-    """Extract language code from subtitle filename.
+    """Extract a 3-letter ISO-639-3 language code from subtitle filename.
+
+    Mirrors msr.bat: the language is the **last 3 characters of the stem** and
+    is *trusted* (not validated against a hard-coded Allow-list), so it catches
+    codes the old substring heuristic missed (``slv``/``dan``/``nob``/``swe``
+    were wrongly falling back to ``und`` and being dropped by ffmpeg).
+
+    Overrides, in priority order (matching the reference):
+      * spoken-language word in the name ("English", "Spanish", ...) -> code;
+      * ``.HI`` marker -> ``und`` (unless ``eng`` precedes it, then ``eng``);
+      * the trailing 3-char code itself, unless it's the media extension
+        ("srt"/"ass"/...) -> ``und``;
+      * a known 2-letter code -> its 3-letter form;
+      * otherwise ``und``.
 
     Args:
         subtitle_path: Path to subtitle file.
 
     Returns:
-        Language code (e.g., "eng", "spa", "und" for undefined).
+        Language code (e.g. "eng", "por", "slv", "und" for undefined).
     """
-    name = subtitle_path.name.lower()
+    name = subtitle_path.name
+    name_lower = name.lower()
     stem = subtitle_path.stem.lower()
 
-    # Check for explicit language indicators
-    if "eng" in name or "english" in name:
-        return "eng"
-    elif "spa" in name or "spanish" in name:
-        return "spa"
-    elif "fre" in name or "french" in name or "fra" in name:
-        return "fre"
-    elif "ger" in name or "german" in name or "deu" in name:
-        return "ger"
-    elif "ita" in name or "italian" in name:
-        return "ita"
-    elif "por" in name or "portuguese" in name:
-        return "por"
-    elif "rus" in name or "russian" in name:
-        return "rus"
-    elif "jap" in name or "japanese" in name or "jpn" in name:
-        return "jap"
-    elif "kor" in name or "korean" in name:
-        return "kor"
-    elif "chi" in name or "chinese" in name or "zho" in name:
-        return "chi"
-    elif "ara" in name or "arabic" in name:
-        return "ara"
-    elif "hin" in name or "hindi" in name:
-        return "hin"
+    # Spoken-language override (highest priority): "English", "Spanish", ...
+    for word, code in _LANG_OVERRIDES.items():
+        if word in name_lower:
+            return code
 
-    # Check for 3-letter language code at the end (before .srt/.ass/etc)
-    # Common pattern: filename.eng.srt or filenameeng.srt
-    if len(stem) >= 3:
-        # Check if last 3 chars are alphabetic (language code)
-        if stem[-3:].isalpha():
-            potential_lang = stem[-3:]
-            # Validate it looks like a language code
-            if potential_lang in ["eng", "spa", "fre", "ger", "ita", "por", "rus", "jap", "kor", "chi", "ara", "hin"]:
-                return potential_lang
+    # .HI marker (hearing impaired): lang is the 3 chars preceding ".hi" if
+    # they form a code, else "eng" if the name mentions eng, else "und".
+    if stem.endswith(".hi"):
+        before = stem[:-3]
+        if len(before) >= 3 and before[-3:].isalpha() \
+                and before[-3:] not in ("srt", "ass", "ssa", "sub", "idx"):
+            if before[-4:-3] == "." or before[-3:] == before:
+                return before[-3:]
+        return "eng" if "eng" in name_lower else "und"
 
-    # Check for 2-letter language code
-    if len(stem) >= 2:
-        potential_lang = stem[-2:]
-        if potential_lang in ["en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh", "ar", "hi"]:
-            # Convert to 3-letter code where possible
-            lang_map = {
-                "en": "eng",
-                "es": "spa",
-                "fr": "fre",
-                "de": "ger",
-                "it": "ita",
-                "pt": "por",
-                "ru": "rus",
-                "ja": "jap",
-                "ko": "kor",
-                "zh": "chi",
-                "ar": "ara",
-                "hi": "hin",
-            }
-            return lang_map.get(potential_lang, potential_lang)
+    # Trailing 3-letter code, except when it's actually the media extension.
+    # Path.stem has already stripped ".srt" etc., so for "dan.srt" the stem is
+    # "dan" and the code is "dan". For "Brazilian (Forced).por.srt" the stem is
+    # "Brazilian (Forced).por" -> last 3 = "por".
+    if len(stem) >= 3 and stem[-3:].isalpha() and stem[-3:] not in ("srt", "ass", "ssa", "sub", "idx"):
+        return stem[-3:]
 
-    # Default to undefined
+    # 2-letter fallback (e.g. "en.srt" -> "eng").
+    two_to_three = {
+        "en": "eng", "es": "spa", "fr": "fre", "de": "ger", "it": "ita",
+        "pt": "por", "ru": "rus", "ja": "jpn", "ko": "kor", "zh": "chi",
+        "ar": "ara", "hi": "hin", "da": "dan", "nl": "dut", "fi": "fin",
+        "nb": "nob", "sv": "swe", "sl": "slv", "uk": "ukr", "pl": "pol",
+    }
+    if len(stem) >= 2 and stem in two_to_three:
+        return two_to_three[stem]
+
     return "und"
 
 
 def get_subtitle_title(subtitle_path: Path) -> str:
-    """Generate a title for the subtitle track based on filename.
+    """Build a display title for a subtitle track from its filename.
+
+    The title is the release label from the filename with the trailing lang
+    marker (``.lll`` or ``.HI``) stripped; ``"SDH"`` leaning-impaired tracks
+    get ``" (SDH)"`` appended when the name doesn't already say SDH. Examples:
+
+      ``"SDH.eng.srt"``                -> ``"English (SDH)"``  (SDH + English)
+      ``"Brazilian (Forced).por.srt"`` -> ``"Brazilian (Forced)"``
+      ``"Ukraine (Forced).ukr.srt"``   -> ``"Ukraine (Forced)"``
+      ``"eng.hi.srt"``                 -> ``"English (SDH)"``  (.HI + English)
+      ``"spa.hi.srt"``                 -> ``"SDH"``            (.HI, non-English)
+      ``"dan.srt"`` / ``"en.srt"``     -> ``""``  (bare code -> no title)
+
+    "Forced" is conveyed as a disposition flag, not baked into the title;
+    "(Forced)" stays only where the release label itself contains it.
 
     Args:
         subtitle_path: Path to subtitle file.
 
     Returns:
-        Title string for the subtitle track.
+        Title string, or "" when the filename carries only a language code.
     """
-    name = subtitle_path.name
-    stem = subtitle_path.stem
+    lang = get_subtitle_language(subtitle_path)
+    stem = _stem_no_ext(subtitle_path)              # "Brazilian (Forced).por"
+    stem_lower = stem.lower()
+    is_hi = stem_lower.endswith(".hi")
 
-    # Remove extension to work with stem
-    # Handle special case where filename ends with language code like .eng
-    # or .en before the actual extension
+    # ---- Strip the trailing lang marker (".lll" / ".HI") from the label ----
+    label = stem
+    if is_hi:
+        label = stem[:-3]                            # drop ".HI"
+    elif len(stem) >= 4 and stem[-4] == "." and stem[-3:].lower() == lang \
+            and lang != "und":
+        label = stem[:-4]                            # drop ".lll"
+    # 2-letter code "en.srt" / "es.srt": Path.stem is "en"; lang="eng", strip "en"
+    elif lang != "und" and stem_lower == lang[:2] and len(stem) == 2:
+        label = ""
 
-    # Start with the stem
-    title = stem
+    # A bare language code (3-letter) leaves label == lang -> no title.
+    if label.lower() == lang and lang != "und":
+        label = ""
 
-    # Handle .HI marker (hearing impaired)
-    if stem.lower().endswith(".hi"):
-        title = stem[:-3]  # Remove .hi
-        # Check if there's a language code before .hi
-        if len(title) >= 3 and title[-3:].isalpha():
-            lang_code = title[-3:]
-            title = title[:-3]  # Remove language code
-            # Map to full language name
-            lang_names = {
-                "eng": "English",
-                "spa": "Spanish",
-                "fre": "French",
-                "ger": "German",
-                "ita": "Italian",
-                "por": "Portuguese",
-                "rus": "Russian",
-                "jap": "Japanese",
-                "kor": "Korean",
-                "chi": "Chinese",
-                "ara": "Arabic",
-                "hin": "Hindi",
-            }
-            lang_name = lang_names.get(lang_code, lang_code.upper())
-            title = f"{lang_name} (SDH)"
-        else:
-            title = f"{title} (SDH)"
+    # ---- " (SDH)" suffix for hearing-impaired tracks ----
+    title = label
+    hearing = needs_sdh_flag(subtitle_path) or is_hi
+    if hearing:
+        # Hearing-impaired English with a bare/SDH-only label -> friendly name.
+        if lang == "eng" and label.lower() in ("", "sdh"):
+            title = "English (SDH)"
+        # Other hearing-impaired: append "(SDH)" only if not already in the title.
+        elif "sdh" not in stem_lower:
+            title = label + " (SDH)" if label else "SDH"
 
-    # Check for explicit language in name
-    name_lower = name.lower()
-    if "english" in name_lower:
-        title = "English"
-    elif "spanish" in name_lower:
-        title = "Spanish"
-    elif "french" in name_lower:
-        title = "French"
-    elif "german" in name_lower:
-        title = "German"
-    elif "italian" in name_lower:
-        title = "Italian"
-    elif "portuguese" in name_lower:
-        title = "Portuguese"
-    elif "russian" in name_lower:
-        title = "Russian"
-    elif "japanese" in name_lower:
-        title = "Japanese"
-    elif "korean" in name_lower:
-        title = "Korean"
-    elif "chinese" in name_lower:
-        title = "Chinese"
-    elif "arabic" in name_lower:
-        title = "Arabic"
-    elif "hindi" in name_lower:
-        title = "Hindi"
+    return " ".join(title.split())
 
-    # Check if SDH is indicated and add to title if not already present
-    if needs_sdh_flag(subtitle_path) and "(sdh)" not in title.lower():
-        if title and not title.endswith(" (SDH)"):
-            title = f"{title} (SDH)"
-        elif not title:
-            title = "SDH"
 
-    # Clean up extra spaces
-    title = " ".join(title.split())
+def _is_main_subtitle(subtitle_path: Path, video_path: Path | None) -> bool:
+    """True when ``subtitle_path`` is the same-named sub for ``video_path``.
 
-    # If we still don't have a good title, use the filename without extension
-    if not title:
-        title = stem
-
-    return title
+    Release naming convention: a subtitle sitting next to the video with the
+    same base name (``Movie.2026.mp4`` -> ``Movie.2026.srt``) is the primary
+    English track (see msr.bat's ``MAIN_SUB``). We compare stem-to-stem so a
+    ``.eng`` infix or bracketed dotted tag doesn't break the match, and accept
+    any subtitle extension.
+    """
+    if video_path is None:
+        return False
+    video_stem = video_path.stem
+    sub_stem = subtitle_path.stem
+    # As a fallback, also accept stem-with-suffix stripped once more, so
+    # "Movie.eng.srt" vs video "Movie.mp4" (video_stem "Movie") still matches.
+    if video_stem == sub_stem:
+        return True
+    # subtitle stem may carry a trailing "<video_ext>" artifact; compare the
+    # subtitle stem up to the video's base length.
+    return sub_stem == video_stem
 
 
 def build_subtitle_disposition_args(
     config: Config,
     subtitle_files: List[Path],
+    video_path: Path | None = None,
 ) -> List[str]:
     """Build FFmpeg disposition arguments for subtitle streams.
 
     Args:
         config: Application configuration.
         subtitle_files: List of subtitle file paths found for the video.
+        video_path: Source video path, used to identify the same-named main
+            subtitle so it can be marked ``default`` per the release convention.
 
     Returns:
         List of FFmpeg arguments for disposition settings.
@@ -294,11 +311,14 @@ def build_subtitle_disposition_args(
     # Determine which subtitle should be default
     default_sub = select_default_subtitle(subtitle_files)
 
+    # The same-named main subtitle is conventionally English and the default.
+    main_sub = next((s for s in subtitle_files if _is_main_subtitle(s, video_path)), None)
+
     for i, sub_file in enumerate(subtitle_files):
         disposition_flags = []
 
         # Check if this should be the default subtitle
-        if sub_file == default_sub:
+        if sub_file == default_sub or sub_file == main_sub:
             disposition_flags.append("default")
 
         # Check if forced
@@ -323,25 +343,35 @@ def build_subtitle_disposition_args(
 def build_subtitle_metadata_args(
     config: Config,
     subtitle_files: List[Path],
+    video_path: Path | None = None,
 ) -> List[str]:
     """Build FFmpeg metadata arguments for subtitle streams.
 
     Args:
         config: Application configuration.
         subtitle_files: List of subtitle file paths found for the video.
+        video_path: Source video path, used to identify the same-named main
+            subtitle and label it English ("language=eng", title="English").
 
     Returns:
         List of FFmpeg arguments for metadata settings.
     """
     args: List[str] = []
 
+    main_sub = next((s for s in subtitle_files if _is_main_subtitle(s, video_path)), None)
+
     for i, sub_file in enumerate(subtitle_files):
-        # Language metadata
-        lang = get_subtitle_language(sub_file)
+        # Same-named main subtitle -> English by release convention.
+        if sub_file == main_sub:
+            lang = "eng"
+            title = "English"
+        else:
+            # Language metadata
+            lang = get_subtitle_language(sub_file)
+            title = get_subtitle_title(sub_file)
         args.extend([f"-metadata:s:s:{i}", f"language={lang}"])
 
         # Title metadata
-        title = get_subtitle_title(sub_file)
         if title:
             args.extend([f"-metadata:s:s:{i}", f"title={title}"])
 
@@ -349,13 +379,36 @@ def build_subtitle_metadata_args(
 
 
 if __name__ == "__main__":
-    # Simple test
+    # Self-check against the real filenames from the Michael batch that broke.
+    # Verify the previously-wrong values are now correct before trusting this.
     from pathlib import Path
-    subs = [Path("Eng.srt"), Path("Forced.srt"), Path("sgn.ass"), Path("eng.hi.srt"), Path("spa.srt")]
-    print("Default:", select_default_subtitle(subs))
+    subs = [
+        Path("SDH.eng.srt"),                      # was: lang=eng, title="SDH.eng (SDH)"
+        Path("Brazilian (Forced).por.srt"),       # was: lang=por, title="Brazilian (Forced).por"
+        Path("Brazilian.por.srt"),               # was: lang=por, title="Brazilian.por"
+        Path("European (Forced).spa.srt"),
+        Path("Latin American.spa.srt"),
+        Path("Forced.ger.srt"),
+        Path("Forced.hin.srt"),
+        Path("Forced.ita.srt"),
+        Path("Slovenia.slv.srt"),                # was: lang MISSING (und dropped), title="Slovenia.slv"
+        Path("Ukraine (Forced).ukr.srt"),        # was: lang MISSING
+        Path("Ukraine.ukr.srt"),
+        Path("dan.srt"),                         # was: lang MISSING, title="dan"
+        Path("dut.srt"),
+        Path("fin.srt"),
+        Path("ger.srt"),
+        Path("hin.srt"),
+        Path("ita.srt"),
+        Path("nob.srt"),
+        Path("swe.srt"),
+        Path("eng.hi.srt"),                      # .HI english -> hearing_impaired disp, lang eng
+        Path("spa.hi.srt"),                      # .HI non-english -> disp, lang und
+        Path("English.srt"),                     # spoken-language override -> eng, title "English"
+        Path("en.srt"),                          # 2-letter -> eng
+    ]
+    print("Default subtitle:", select_default_subtitle(subs).name if subs else None)
     for s in subs:
         print(f"{s.name}:")
-        print(f"  forced={needs_forced_flag(s)}")
-        print(f"  sdh={needs_sdh_flag(s)}")
-        print(f"  language={get_subtitle_language(s)}")
-        print(f"  title='{get_subtitle_title(s)}'")
+        print(f"  forced={needs_forced_flag(s):<5} sdh={needs_sdh_flag(s):<5} "
+              f"language={get_subtitle_language(s):<4} title={get_subtitle_title(s)!r}")
