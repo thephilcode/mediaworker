@@ -112,6 +112,15 @@ def build_ffmpeg_cmd(
         ffmpeg_cmd.extend(["-c:v", "copy"])
     else:
         ffmpeg_cmd.extend(["-c:v", encoder.video_codec, "-preset", encoder.preset, "-crf", str(encoder.crf)])
+        # Pixel format (e.g. "yuv420p10le" for 10-bit). Empty -> codec default.
+        # Applied to any re-encoded video, not just x265.
+        if encoder.pix_fmt:
+            ffmpeg_cmd.extend(["-pix_fmt", encoder.pix_fmt])
+        # x265 tuning params. Only emitted for libx265; other codecs ignore
+        # this field. Passed as a single arg (no shell quoting): the colons
+        # separate params and need no escaping under subprocess list form.
+        if encoder.x265_params and encoder.video_codec == "libx265":
+            ffmpeg_cmd.extend(["-x265-params", encoder.x265_params])
         # Scaling (only when re-encoding video).
         # Preserves aspect ratio and forces even dimensions (codec requirement).
         # Commas inside expressions are backslash-escaped so the filtergraph

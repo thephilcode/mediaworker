@@ -40,6 +40,15 @@ class EncoderSettings:
     # when encoding to libx265, or "aac" with "opus" when encoding to libopus)
     # to visually distinguish re-encoded files.
     rename_by_codec: bool = False
+    # Pixel format passed as -pix_fmt on re-encode (e.g. "yuv420p10le" for
+    # 10-bit x265). Empty -> let the codec pick its default (8-bit yuv420p
+    # for x265/x264). Ignored when copy_video is True.
+    pix_fmt: str = ""
+    # Extra params appended as -x265-params when video_codec == "libx265"
+    # (colon-separated, no quoting needed; the value is passed as one arg to
+    # subprocess, not through a shell). Ignored for other codecs and when
+    # copy_video is True. Empty -> no -x265-params flag.
+    x265_params: str = ""
 
 
 @dataclass
@@ -123,6 +132,8 @@ def load_config(config_path: Path | str = "config.toml") -> Config:
         max_attempts=enc_data.get("max_attempts", 3),
         output_extension=enc_data.get("output_extension"),
         rename_by_codec=enc_data.get("rename_by_codec", False),
+        pix_fmt=enc_data.get("pix_fmt", ""),
+        x265_params=enc_data.get("x265_params", ""),
     )
 
     # FFmpeg settings (optional)
