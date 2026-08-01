@@ -229,6 +229,42 @@ def build_subtitle_disposition_args(
     return args
 
 
+def build_subtitle_metadata_args(
+    config: Config,
+    subtitle_files: List[Path],
+    video_path: Path | None = None,
+) -> List[str]:
+    """Build FFmpeg metadata arguments for subtitle streams (language, title).
+    Args:
+        config: Application configuration.
+        subtitle_files: List of subtitle file paths found for the video.
+        video_path: Source video path, used to identify the same-named main
+            subtitle for the 'default' flag in title generation.
+    Returns:
+        List of FFmpeg arguments for subtitle metadata.
+    """
+    args: List[str] = []
+    if not subtitle_files:
+        return args
+    # Default language for title generation (if available in config)
+    default_lang = None  # No subtitle-specific config, use None
+    for i, sub_file in enumerate(subtitle_files):
+        language = get_subtitle_language(sub_file)
+        title = _build_title(
+            None,
+            language,
+            needs_sdh_flag(sub_file),
+            needs_default_flag(sub_file, video_path),
+            needs_forced_flag(sub_file),
+        )
+        if title is not None:
+            args.extend([f"-metadata:s:s:{i}", f"title={title}"])
+        # Always set language if we have a non-empty string (even if und)
+        if language:
+            args.extend([f"-metadata:s:s:{i}", f"language={language}"])
+    return args
+
+
 def _sanitize_label(label: str | None) -> str | None:
     """Sanitize a subtitle label by trimming whitespace and normalizing.
 

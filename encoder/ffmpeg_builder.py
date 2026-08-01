@@ -144,8 +144,12 @@ def build_ffmpeg_cmd(
 
         ffmpeg_cmd.extend(["-c:a", encoder.audio_codec, "-b:a", audio_bitrate])
 
-        # VBR flag (if enabled) - applies to any codec
-        if encoder.vbr:
+        # Set mapping family for libopus to handle channel layouts like 5.1(side)
+        if encoder.audio_codec == "libopus":
+            ffmpeg_cmd.extend(["-mapping_family", "1"])
+
+        # VBR flag (if enabled) - applies to any codec except libopus
+        if encoder.vbr and encoder.audio_codec != "libopus":
             ffmpeg_cmd.extend(["-vbr", "on"])
 
         # No -channel_layout: libopus derives the output layout from the input
