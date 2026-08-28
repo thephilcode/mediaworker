@@ -168,6 +168,8 @@ def build_ffmpeg_cmd(
     ffmpeg_cmd.extend(["-map", "0:v"])
     # Map audio from first input (0:a)
     ffmpeg_cmd.extend(["-map", "0:a?"])  # optional audio
+    # Map subtitles from firt input (0:s)
+    ffmpeg_cmd.extend(["-map", "0:s?"])  # optional subtitles
     # Map subtitles: each subtitle file is an additional input, starting at index 1
     for i in range(len(subtitle_files)):
         ffmpeg_cmd.extend(["-map", f"{i+1}:s?"])  # optional subtitle stream

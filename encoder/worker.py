@@ -7,6 +7,7 @@ and handles moving files from processing to output.
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,54 @@ from .scanner import get_pending_files
 from .utils import ensure_dir, setup_logging, human_readable_bytes
 
 logger = logging.getLogger("mediaworker")
+
+
+def _canonical_token(encoder_name: str, codec_groups: list[tuple[str, list[str]]]) -> str | None:
+    """Return the canonical filename token for ``encoder_name``.
+
+    ``encoder_name`` is the FFmpeg encoder (``"libx265"``, ``"libopus"``); the
+    token is the short name releases put in filenames. An exact match on the
+    token, a substring of the encoder name (``"x265" in "libx265"``), or an
+    explicit alias (``"libopus"`` listed as an alias) all resolve the group.
+    """
+    for token, aliases in codec_groups:
+        if encoder_name == token or token in encoder_name or encoder_name in aliases:
+            return token
+    return None
+
+
+def _rewrite_codec(stem: str, encoder_name: str, codec_groups: list[tuple[str, list[str]]]) -> str:
+    """Rewrite a filename's codec tokens to reflect a re-encode.
+
+    Only a token that names a codec *different* from the target gets rewritten
+    to the target's canonical token. A token that already names the target
+    codec (e.g. "HEVC" or "x265" when encoding to libx265) is left untouched,
+    so a filename that already advertises the codec ("HEVC x265") is not
+    mangled into "x265 x265".
+    """
+    target = _canonical_token(encoder_name, codec_groups)
+    if target is None:
+        return stem
+
+    # Map every alias to its group's canonical token.
+    alias_to_group: dict[str, str] = {}
+    for group_token, aliases in codec_groups:
+        for alias in aliases:
+            alias_to_group[alias] = group_token
+
+    # Longest aliases first so "eac3" beats "ac3", "H264" vs "avc", etc.
+    pattern = re.compile(
+        "|".join(re.escape(a) for a in sorted(alias_to_group, key=len, reverse=True))
+    )
+
+    def replace(match: re.Match) -> str:
+        alias = match.group(0)
+        # A token naming the target codec is already correct; leave it.
+        if alias_to_group[alias] == target:
+            return alias
+        return target
+
+    return pattern.sub(replace, stem)
 
 
 def process_file(config: Config, input_path: Path) -> bool:
@@ -61,36 +110,32 @@ def process_file(config: Config, input_path: Path) -> bool:
         original_stem = stem
         # Video codec replacement (if not copying video)
         if not config.encoder.copy_video:
-            codec_to_token = {
-                "libx264": "x264",
-                "libx265": "x265",
-                "libvpx-vp9": "vp9",
-                "av1": "av1",
-            }
-            token = codec_to_token.get(config.encoder.video_codec, config.encoder.video_codec)
-            # Known patterns that indicate a video codec in filenames
-            patterns = ["x264", "h264", "H264", "avc", "AVC",
-                        "x265", "h265", "H265", "hevc", "HEVC",
-                        "av1", "AV1"]
-            for pat in patterns:
-                if pat in stem:
-                    stem = stem.replace(pat, token)
+            # Each group lists every alias releases use for one codec; the
+            # first entry is the canonical token we rename to. A token that
+            # already names the target codec is left alone (so "HEVC x265"
+            # doesn't become "x265 x265"); tokens naming a *different* codec
+            # are rewritten to the target's canonical token.
+            video_codec_aliases = [
+                ("x264", ["x264", "h264", "H264", "avc", "AVC"]),
+                ("x265", ["x265", "h265", "H265", "hevc", "HEVC"]),
+                ("vp9",  ["vp9", "VP9", "vp09"]),
+                ("av1",  ["av1", "AV1"]),
+            ]
+            stem = _rewrite_codec(stem, config.encoder.video_codec, video_codec_aliases)
         # Audio codec replacement (if not copying audio)
         if not config.encoder.copy_audio:
-            audio_codec_to_token = {
-                "aac": "aac",
-                "ac3": "ac3",
-                "libopus": "opus",
-                "mp3": "mp3",
-                "flac": "flac",
-                # Add more as needed
-            }
-            audio_token = audio_codec_to_token.get(config.encoder.audio_codec, config.encoder.audio_codec)
-            # Known patterns that indicate an audio codec in filenames
-            audio_patterns = ["aac", "ac3", "opus", "mp3", "flac"]
-            for pat in audio_patterns:
-                if pat in stem:
-                    stem = stem.replace(pat, audio_token)
+            audio_codec_aliases = [
+                ("aac",  ["aac", "AAC"]),
+                ("ac3",  ["ac3", "AC3"]),
+                # Encoder aliases ("libopus", "libmp3lame") so they map to
+                # the right group; the rewrite step treats them like any
+                # other alias and skips them when the encoder matches them.
+                ("opus", ["opus", "OPUS", "libopus"]),
+                ("mp3",  ["mp3", "MP3", "libmp3lame"]),
+                ("flac", ["flac", "FLAC"]),
+                ("ddp",  ["ddp", "DDP", "eac3", "EAC3"]),  # Dolby Digital Plus
+            ]
+            stem = _rewrite_codec(stem, config.encoder.audio_codec, audio_codec_aliases)
         # If the stem changed, update the relative path
         if stem != original_stem:
             # Preserve the suffix (which may have been changed by output_extension override)
