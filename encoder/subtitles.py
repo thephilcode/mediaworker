@@ -58,10 +58,10 @@ def select_default_subtitle(subtitles: List[Path]) -> Path | None:
             lang_score = 2
         elif ".en" in name:
             lang_score = 2
-        elif name.endswith(".srt") or name.endswith(".ass") or name.endswith(".ssa"):
-            # Check if it's a 3-letter language code
-            if len(stem) >= 3 and stem[-3:].isalpha():
-                lang_score = 1  # Generic language code
+        # Check for a language code in the stem (e.g., "Movie.eng.srt" -> "eng")
+        # We look at the segments split by dots, from right to left.
+        if get_subtitle_language(path) != "und":
+            lang_score = 1  # Generic language code
 
         # Check for SDH (Subtitles for Deaf and Hard-of-hearing)
         sdh_penalty = 0
@@ -254,6 +254,7 @@ def build_subtitle_metadata_args(
     args: List[str] = []
     if not subtitle_files:
         return args
+
     # A single external subtitle needs no title; its language metadata alone
     # identifies it. Titles are reserved for multi-sub files, where a filename
     # label (e.g. "Brazilian (Forced)") tells the tracks apart.
@@ -314,29 +315,26 @@ def get_subtitle_label(subtitle_path: Path) -> str | None:
 def get_subtitle_language(subtitle_path: Path) -> str:
     """Extract a 3-letter ISO-639-3 language code from subtitle filename.
 
-    Heuristic: checks for common language indicators in filename.
+    Heuristic: splits the stem by dots and looks for the first 2- or 3-letter
+    alpha segment from the right that isn't a known modifier.
     Returns "und" (undetermined) if no language can be detected.
 
     Args:
         subtitle_path: Path to subtitle file.
 
     Returns:
-        A 3-letter language code string.
+        A language code string.
     """
     name = subtitle_path.name.lower()
     stem = subtitle_path.stem.lower()
 
-    # Check for 2-letter language codes
-    if name.endswith(".srt") or name.endswith(".ass") or name.endswith(".ssa"):
-        if len(stem) >= 2 and stem[-2:].isalpha():
-            return stem[-2:]
+    # Look for language codes in the stem segments (right to left)
+    # e.g., "Movie.eng.hi.srt" -> parts=["movie", "eng", "hi"] -> returns "eng"
+    for part in reversed(stem.split('.')):
+        if (len(part) == 2 or len(part) == 3) and part.isalpha() and part not in {'sdh', 'hi', 'forced'}:
+            return part
 
-    # Check for 3-letter language codes
-    if name.endswith(".srt") or name.endswith(".ass") or name.endswith(".ssa"):
-        if len(stem) >= 3 and stem[-3:].isalpha():
-            return stem[-3:]
-
-    # Check for English indicators
+    # Fallback for English indicators anywhere in the name
     if any(indicator in name for indicator in ["eng", "english", ".en"]):
         return "eng"
 
