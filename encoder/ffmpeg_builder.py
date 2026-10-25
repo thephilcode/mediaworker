@@ -186,7 +186,8 @@ def build_ffmpeg_cmd(
     # Add global and video stream comment if configured
     if encoder.comment:
         ffmpeg_cmd.extend(["-metadata", f"comment={encoder.comment}"])
-        ffmpeg_cmd.extend(["-metadata:s:v:0", f"comment={encoder.comment}"])
+        ffmpeg_cmd.extend(["-metadata:s:v", f"comment={encoder.comment}"])
+        ffmpeg_cmd.extend(["-metadata:s:a", f"comment={encoder.comment}"])
     # Optional: Disable subtitle encoding if we're copying
     # Not needed as mapping is handled above
 
