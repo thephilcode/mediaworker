@@ -21,6 +21,9 @@ class EncoderSettings:
     audio_codec: str = "aac"
     audio_bitrate: str = "128k"
     subtitle_codec: str = "copy"
+    # Default language to assume for a single subtitle when no language code is detected.
+    # Use "eng" for English, "und" for undetermined, or None to omit the metadata entry.
+    default_subtitle_language: str | None = "eng"
     max_width: int | None = None
     max_height: int | None = None
     scale_down_only: bool = True

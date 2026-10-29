@@ -31,6 +31,9 @@ audio_codec = "libopus"
 audio_bitrate = "96k"
 # Subtitle codec (copy to preserve original, or re-encode e.g. to "subrip")
 subtitle_codec = "copy"
+# Default language to assume for a single subtitle when no language code is detected.
+# Use "eng" for English, "und" for undetermined, or None to omit the metadata entry.
+default_subtitle_language = ""
 # Maximum width/height for scaling (set to null to disable that limit)
 max_width = 1920
 max_height = 1080

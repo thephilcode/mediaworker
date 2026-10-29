@@ -255,17 +255,24 @@ def build_subtitle_metadata_args(
     if not subtitle_files:
         return args
 
-    # A single external subtitle needs no title; its language metadata alone
-    # identifies it. Titles are reserved for multi-sub files, where a filename
-    # label (e.g. "Brazilian (Forced)") tells the tracks apart.
-    single_sub = len(subtitle_files) == 1
+    # Determine default language fallback from config
+    default_lang = config.encoder.default_subtitle_language
+
     for i, sub_file in enumerate(subtitle_files):
         language = get_subtitle_language(sub_file)
-        if not single_sub:
+
+        # If it's the only subtitle and language is undetermined, use config fallback
+        if len(subtitle_files) == 1 and language == "und":
+            language = default_lang
+
+        # A single external subtitle needs no title; its language metadata alone
+        # identifies it. Titles are reserved for multi-sub files.
+        if len(subtitle_files) > 1:
             label = get_subtitle_label(sub_file)
             if label is not None:
                 args.extend([f"-metadata:s:s:{i}", f"title={label}"])
-        # Always set language if we have a non-empty string (even if und)
+
+        # Only add language metadata if we have a value (not None)
         if language:
             args.extend([f"-metadata:s:s:{i}", f"language={language}"])
     return args
@@ -332,7 +339,10 @@ def get_subtitle_language(subtitle_path: Path) -> str:
     # e.g., "Movie.eng.hi.srt" -> parts=["movie", "eng", "hi"] -> returns "eng"
     for part in reversed(stem.split('.')):
         if (len(part) == 2 or len(part) == 3) and part.isalpha() and part not in {'sdh', 'hi', 'forced'}:
-            return part
+            # To avoid misinterpreting "III" or "The" as languages,
+            # we only accept it if it's in our known language list.
+            if part in KNOWN_SUFFIXES:
+                return part
 
     # Fallback for English indicators anywhere in the name
     if any(indicator in name for indicator in ["eng", "english", ".en"]):
